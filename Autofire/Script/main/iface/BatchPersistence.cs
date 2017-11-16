@@ -268,8 +268,10 @@
 
 				if (forceBegin && IsBatchEmpty (wrEvents))
 					forceBegin = false;
-				if (forceBegin)
+				if (forceBegin) {
 					IncWriteBatch (timestamp, ref wr, ref rd, ref wrEvents);
+					result = 1;
+				}
 
 				AppendEvent (wr, ref wrEvents, header, tags, gameEvent, timestamp);
 
