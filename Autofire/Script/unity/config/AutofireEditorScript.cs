@@ -100,7 +100,7 @@ namespace AutofireClient.Unity.Util
 		//    //Application.OpenURL(url);
 		//}
 
-		[MenuItem ("Window/Autofire/Remove")]
+		[MenuItem ("Window/Autofire/Remove Editor Script")]
 		public static void Remove ()
 		{
 			string fullPath = Path.Combine (Path.Combine ("Assets", SETTINGS_PATH),

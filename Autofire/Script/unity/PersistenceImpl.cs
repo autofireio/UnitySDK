@@ -52,6 +52,16 @@ namespace AutofireClient.Unity
 			return true;
 		}
 
+		public override string GetAutofireVersion ()
+		{
+			return GetString ("ver");
+		}
+
+		public override void SetAutofireVersion (string version)
+		{
+			SetString ("ver", version);
+		}
+
 		public override string ReadUUID ()
 		{
 			return GetString ("uuid");
@@ -91,14 +101,14 @@ namespace AutofireClient.Unity
 			SetString (GetBatchTimestampKey (key), timestamp.ToString ());
 		}
 
-		protected override int GetCurrentBatchEvents ()
+		protected override int GetWriteBatchEvents ()
 		{
-			return GetInt ("currentBatchEvents");
+			return GetInt ("writeBatchEvents");
 		}
 
-		protected override void SetCurrentBatchEvents (int currentBatchEvents)
+		protected override void SetWriteBatchEvents (int writeBatchEvents)
 		{
-			SetInt ("currentBatchEvents", currentBatchEvents);
+			SetInt ("writeBatchEvents", writeBatchEvents);
 		}
 
 		protected override int GetReadBatch ()

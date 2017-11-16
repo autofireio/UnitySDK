@@ -30,35 +30,41 @@ namespace AutofireClient
 		               long initTimestamp, string atLevel)
 		{
 			string v;
+			string vv;
 
 			this.autofireVersion = Version.VERSION;
 			if (features.TryGetValue (PLATFORM_KEY, out v)) {
-				this.platform = v;
+				vv = v;
 				features.Remove (PLATFORM_KEY);
 			} else
-				this.platform = env.GetPlatform ();
+				vv = env.GetPlatform ();
+			this.platform = GameEvent.SanitizeNominalValue (vv);
 			if (features.TryGetValue (OS_KEY, out v)) {
-				this.os = v;
+				vv = v;
 				features.Remove (OS_KEY);
 			} else
-				this.os = env.GetOs ();
+				vv = env.GetOs ();
+			this.os = GameEvent.SanitizeNominalValue (vv);
 			if (features.TryGetValue (MODEL_KEY, out v)) {
-				this.model = v;
+				vv = v;
 				features.Remove (MODEL_KEY);
 			} else
-				this.model = env.GetModel ();
+				vv = env.GetModel ();
+			this.model = GameEvent.SanitizeNominalValue (vv);
 			if (features.TryGetValue (LOCALE_KEY, out v)) {
-				this.locale = v;
+				vv = v;
 				features.Remove (LOCALE_KEY);
 			} else
-				this.locale = env.GetLocale ();
+				vv = env.GetLocale ();
+			this.locale = GameEvent.SanitizeNominalValue (vv);
 			if (features.TryGetValue (VERSION_KEY, out v)) {
-				this.version = v;
+				vv = v;
 				features.Remove (VERSION_KEY);
 			} else
-				this.version = env.GetVersion ();
+				vv = env.GetVersion ();
+			this.version = GameEvent.SanitizeNominalValue (vv);
 			this.initTimestamp = initTimestamp;
-			this.atLevel = atLevel;
+			this.atLevel = GameEvent.SanitizeNominalValue (atLevel);
 
 			if (features != null)
 				this.features = new Dictionary<string, string> (features);
@@ -66,18 +72,28 @@ namespace AutofireClient
 				this.features = new Dictionary<string, string> ();
 		}
 
+		private bool TryAdd (Dictionary<string, string> to, string key, string value)
+		{
+			if (!string.IsNullOrEmpty (value) && value != GameEvent.EMPTY_STRING) {
+				to.Add (key, value);
+
+				return true;
+			}
+
+			return false;
+		}
+
 		internal Dictionary<string, string> ToRaw ()
 		{
 			Dictionary<string, string> result = new Dictionary<string, string> (features);
-			result.Add ("autofireVersion", autofireVersion);
-			result.Add (PLATFORM_KEY, platform);
-			result.Add (OS_KEY, os);
-			result.Add (MODEL_KEY, model);
-			result.Add (LOCALE_KEY, locale);
-			result.Add (VERSION_KEY, version);
-			result.Add ("initTimestamp", GameEvent.ToISO8601String (initTimestamp));
-			if (!string.IsNullOrEmpty (atLevel))
-				result.Add ("atLevel", atLevel);
+			TryAdd (result, "autofireVersion", autofireVersion);
+			TryAdd (result, PLATFORM_KEY, platform);
+			TryAdd (result, OS_KEY, os);
+			TryAdd (result, MODEL_KEY, model);
+			TryAdd (result, LOCALE_KEY, locale);
+			TryAdd (result, VERSION_KEY, version);
+			TryAdd (result, "initTimestamp", GameEvent.ToISO8601String (initTimestamp));
+			TryAdd (result, "atLevel", atLevel);
 
 			return result;
 		}

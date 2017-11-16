@@ -6,16 +6,27 @@ namespace AutofireClient.Util
 	public class MemPersistenceImpl : BatchPersistence
 	{
 
+		private static string version = "";
 		private static string uuid = "nobody";
-		private static int currentBatchEvents = 0;
-		private static int readBatch = 0;
-		private static int writeBatch = 0;
 		private static string[] batches = new string[MAX_BATCHES];
 		private static long[] batchTimestamps = new long[MAX_BATCHES];
+		private static int readBatch = 0;
+		private static int writeBatch = 0;
+		private static int writeBatchEvents = 0;
 
 		public override bool IsAvailable ()
 		{
 			return true;
+		}
+
+		public override string GetAutofireVersion ()
+		{
+			return version;
+		}
+
+		public override void SetAutofireVersion (string version)
+		{
+			MemPersistenceImpl.version = version;
 		}
 
 		public override string ReadUUID ()
@@ -51,14 +62,14 @@ namespace AutofireClient.Util
 			batchTimestamps [key] = timestamp;
 		}
 
-		protected override int GetCurrentBatchEvents ()
+		protected override int GetWriteBatchEvents ()
 		{
-			return currentBatchEvents;
+			return writeBatchEvents;
 		}
 
-		protected override void SetCurrentBatchEvents (int currentBatchEvents)
+		protected override void SetWriteBatchEvents (int writeBatchEvents)
 		{
-			MemPersistenceImpl.currentBatchEvents = currentBatchEvents;
+			MemPersistenceImpl.writeBatchEvents = writeBatchEvents;
 		}
 
 		protected override int GetReadBatch ()

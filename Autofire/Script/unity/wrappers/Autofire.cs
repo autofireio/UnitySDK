@@ -29,6 +29,12 @@ namespace AutofireClient.Unity
 				autofire.Initialize (gameId);
 		}
 
+		void OnApplicationPause (bool pauseStatus)
+		{
+			if (pauseStatus)
+				autofire.Flush ();
+		}
+
 		void OnApplicationQuit ()
 		{
 			autofire.Finish ();
@@ -44,9 +50,14 @@ namespace AutofireClient.Unity
 			new Monetize (item, ac, qty).Send ();
 		}
 
-		public static void Resource (string resourceName, int qty)
+		public static void Monetize (string item, int ac)
 		{
-			new Resource (resourceName, qty).Send ();
+			Autofire.Monetize (item, ac, 1);
+		}
+
+		public static void Resource (string name, int qty)
+		{
+			new Resource (name, qty).Send ();
 		}
 
 		public static void Action (string what)

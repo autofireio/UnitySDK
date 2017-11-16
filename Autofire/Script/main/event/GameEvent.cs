@@ -15,7 +15,7 @@ namespace AutofireClient.Event
 		private const int MAX_NAME_LEN = 32;
 		private const int MAX_KEY_LEN = 64;
 		private const int MAX_NOMINAL_VALUE_LEN = 64;
-		private const string EMPTY_STRING = "_EMPTY";
+		internal const string EMPTY_STRING = "_EMPTY";
 
 		private const int MAX_FEATURES = 0;
 

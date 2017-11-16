@@ -25,7 +25,11 @@
 
 		public override string ToString ()
 		{
-			return "{\t\"code\": " + code + ",\t\"body\": \"" + body + "\"\t}";
+			string b = body;
+			if (b == null)
+				b = "";
+			
+			return "{\t\"code\": " + code + ",\t\"body\": \"" + b + "\"\t}";
 		}
 
 	}

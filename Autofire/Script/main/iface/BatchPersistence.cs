@@ -6,6 +6,10 @@
 
 		public abstract bool IsAvailable ();
 
+		public abstract string GetAutofireVersion ();
+
+		public abstract void SetAutofireVersion (string version);
+
 		public abstract string ReadUUID ();
 
 		public abstract bool WriteUUID (string guid);
@@ -20,9 +24,9 @@
 
 		protected abstract void SetBatchWithTimestamp (int key, string value, long timestamp);
 
-		protected abstract int GetCurrentBatchEvents ();
+		protected abstract int GetWriteBatchEvents ();
 
-		protected abstract void SetCurrentBatchEvents (int currentBatchEvents);
+		protected abstract void SetWriteBatchEvents (int writeBatchEvents);
 
 		protected abstract int GetReadBatch ();
 
@@ -39,6 +43,8 @@
 		protected static int maxEventsPerBatch = 32;
 		protected static int maxBatches = 16;
 		protected static long retentionInSecs = ONE_WEEK_IN_SECS;
+
+		private static int previousReadBatch = -1;
 
 		public void SetGameId (string gameId)
 		{
@@ -71,33 +77,9 @@
 				BatchPersistence.maxBatches = 2;
 		}
 
-		private void ResetCurrentBatchEvents ()
+		private void ResetWriteBatchEvents ()
 		{
-			SetCurrentBatchEvents (0);
-		}
-
-		private int IncCurrentBatchEvents (int batchEvents)
-		{
-			int t = batchEvents;
-			if (t >= maxEventsPerBatch - 1)
-				return -1;
-
-			t++;
-			SetCurrentBatchEvents (t);
-			return t;
-		}
-
-		private int NextBatch (int batch)
-		{
-			return (batch + 1) % MAX_BATCHES;
-		}
-
-		private int BatchesDiff (int write, int read)
-		{
-			if (write >= read)
-				return write - read;
-
-			return (MAX_BATCHES - read) + (write - 1);
+			SetWriteBatchEvents (0);
 		}
 
 		private void ResetReadBatch ()
@@ -105,69 +87,167 @@
 			SetReadBatch (0);
 		}
 
-		private int NextReadBatch (int currentReadBatch, int currentWriteBatch)
-		{
-			int rd = NextBatch (currentReadBatch);
-
-			if (currentReadBatch == currentWriteBatch)
-				return -1;
-
-			SetReadBatch (rd);
-			return rd;
-		}
-
 		private void ResetWriteBatch ()
 		{
 			SetWriteBatch (0);
 		}
 
-		private int NextWriteBatch (int currentWriteBatch, int currentReadBatch)
+		private void ResetBatches ()
 		{
-			int wr = NextBatch (currentWriteBatch);
-
-			if (wr == currentReadBatch)
-				return -2;
-			else if (BatchesDiff (wr, currentReadBatch) > maxBatches)
-				return -1;
-
-			SetWriteBatch (wr);
-			return wr;
+			ResetWriteBatchEvents ();
+			ResetReadBatch ();
+			ResetWriteBatch ();
 		}
 
-		private bool CheckRetention (long now, long timestamp)
+		public void Reset ()
+		{
+			WriteUUID ("");
+			ResetBatches ();
+		}
+
+		private bool IsBatchEmpty (int batchEvents)
+		{
+			return batchEvents == 0;
+		}
+
+		private bool IsBatchFull (int batchEvents)
+		{
+			return batchEvents >= maxEventsPerBatch;
+		}
+
+		private int NextBatch (int batch)
+		{
+			return (batch + 1) % maxBatches;
+		}
+
+		private int Diff (int writeBatch, int readBatch)
+		{
+			if (writeBatch >= readBatch)
+				return writeBatch - readBatch;
+
+			return (maxBatches - readBatch) + (writeBatch - 1);
+		}
+
+		private bool IsEmpty (int writeBatch, int readBatch)
+		{
+			return writeBatch == readBatch;
+		}
+
+		private bool IsEmpty (int writeBatch, int readBatch, int writeBatchEvents)
+		{
+			return IsBatchEmpty (writeBatchEvents) && IsEmpty (writeBatch, readBatch);
+		}
+
+		private bool IsFull (int writeBatch, int readBatch)
+		{
+			return NextBatch (writeBatch) == readBatch;
+		}
+
+		private bool IsFull (int writeBatch, int readBatch, int writeBatchEvents)
+		{
+			return IsBatchFull (writeBatchEvents) && IsFull (writeBatch, readBatch);
+		}
+
+		private bool IsInRetention (long now, long timestamp)
 		{
 			return (now - timestamp) <= retentionInSecs;
 		}
 
-		private void AppendEvent (int currentBatch,
-		                          int eventsAlreadyInBatch,
+		private int FilterRetention (long timestamp,
+		                             int writeBatch,
+		                             ref int readBatch,
+		                             ref int writeBatchEvents)
+		{
+			int i = 0;
+			bool done = false;
+			long rdTs;
+			while (!done)
+				if (IsEmpty (writeBatch, readBatch, writeBatchEvents))
+					done = true;
+				else {
+					rdTs = GetBatchTimestamp (readBatch);
+					if (IsInRetention (timestamp, rdTs))
+						done = true;
+					else if (IsEmpty (writeBatch, readBatch)) {
+						ResetWriteBatchEvents ();
+						writeBatchEvents = 0;
+						i++;
+						done = true;
+					} else {
+						readBatch = NextBatch (readBatch);
+						i++;
+					}
+				}
+			if (i > 0)
+				SetReadBatch (readBatch);
+
+			return i;
+		}
+
+		private void AppendEvent (int writeBatch,
+		                          ref int writeBatchEvents,
 		                          string header,
 		                          string tags,
 		                          string gameEvent,
 		                          long timestamp)
 		{
-			string batchValue = GetBatch (currentBatch);
-			if (eventsAlreadyInBatch == 0)
+			string batchValue;
+			if (writeBatchEvents == 0)
 				batchValue = "{" +
 				"\"header\":" + header + "," +
 				"\"tags\":" + tags + "," +
 				"\"events\":[";
-			else
+			else {
+				batchValue = GetBatch (writeBatch);
 				batchValue += ",";
+			}
 			batchValue += gameEvent;
-			SetBatchWithTimestamp (currentBatch, batchValue, timestamp);
+			SetBatchWithTimestamp (writeBatch, batchValue, timestamp);
+			writeBatchEvents++;
 		}
 
-		private string SealBatch (int currentBatch)
+		private string SealBatch (int readBatch)
 		{
-			string batchValue = GetBatch (currentBatch);
+			string batchValue = GetBatch (readBatch);
 			if (string.IsNullOrEmpty (batchValue))
 				return "";
 
-			if (!batchValue.EndsWith ("]}"))
+			if (!batchValue.EndsWith ("]}")) {
 				batchValue += "]}";
-			SetBatch (currentBatch, batchValue);
+				SetBatch (readBatch, batchValue);
+			}
+
 			return batchValue;
+		}
+
+		private void IncWriteBatch (long timestamp,
+		                            ref int writeBatch,
+		                            ref int readBatch,
+		                            ref int writeBatchEvents)
+		{
+			if (IsFull (writeBatch, readBatch)) {
+				int removed =
+					FilterRetention (timestamp, writeBatch, ref readBatch, ref writeBatchEvents);
+				if (removed == 0)
+					readBatch = NextBatch (readBatch);
+			}
+			writeBatch = NextBatch (writeBatch);
+			writeBatchEvents = 0;
+		}
+
+		private void SetBatches (int previousWriteBatch,
+		                         int currentWriteBatch,
+		                         int previousReadBatch,
+		                         int currentReadBatch,
+		                         int previousWriteBatchEvents,
+		                         int currentWriteBatchEvents)
+		{
+			if (previousWriteBatch != currentWriteBatch)
+				SetWriteBatch (currentWriteBatch);
+			if (previousReadBatch != currentReadBatch)
+				SetReadBatch (currentReadBatch);
+			if (previousWriteBatchEvents != currentWriteBatchEvents)
+				SetWriteBatchEvents (currentWriteBatchEvents);
 		}
 
 		public int WriteSerialized (long timestamp,
@@ -178,122 +258,95 @@
 		                            bool forceEnd = false)
 		{
 			try {
-				int currWr = GetWriteBatch ();
-				int currRd = GetReadBatch ();
-				int currBatchEvents = GetCurrentBatchEvents ();
+				int wr0 = GetWriteBatch ();
+				int wr = wr0;
+				int rd0 = GetReadBatch ();
+				int rd = rd0;
+				int wrEvents0 = GetWriteBatchEvents ();
+				int wrEvents = wrEvents0;
+				int result = 0;
 
-				int currWr2 = currWr;
-				if (forceBegin && currBatchEvents > 0) {
-					currWr2 = NextWriteBatch (currWr, currRd);
-					if (currWr2 >= 0) {
-						ResetCurrentBatchEvents ();
-					} else {
-						string rr = ReadSerialized (timestamp);
-						if (string.IsNullOrEmpty (rr))
-							return 0;
+				if (forceBegin && IsBatchEmpty (wrEvents))
+					forceBegin = false;
+				if (forceBegin)
+					IncWriteBatch (timestamp, ref wr, ref rd, ref wrEvents);
 
-						CommitReadSerialized ();
-					}
-					currWr = GetWriteBatch ();
-					currRd = GetReadBatch ();
-					currBatchEvents = GetCurrentBatchEvents ();
+				AppendEvent (wr, ref wrEvents, header, tags, gameEvent, timestamp);
+
+				if (IsBatchFull (wrEvents))
+					forceEnd = true;
+				if (forceEnd) {
+					IncWriteBatch (timestamp, ref wr, ref rd, ref wrEvents);
+					result = 1;
 				}
 
-				AppendEvent (currWr2, currBatchEvents, header, tags, gameEvent, timestamp);
-				currBatchEvents++;
-				int incBatchEvents = IncCurrentBatchEvents (currBatchEvents);
-				if ((forceEnd && incBatchEvents >= 0) || incBatchEvents < 0) {
-					int nextWr = NextWriteBatch (currWr2, currRd);
-					if (nextWr >= 0) {
-						ResetCurrentBatchEvents ();
-						return 1;
-					} else {
-						string r = ReadSerialized (timestamp);
-						if (string.IsNullOrEmpty (r))
-							return 0;
+				SetBatches (wr0, wr, rd0, rd, wrEvents0, wrEvents);
 
-						CommitReadSerialized ();
-						nextWr = NextWriteBatch (currWr2, currRd);
-						if (nextWr >= 0)
-							return 1;
-						else
-							return 0;
-					}
-				} else {
-					// incBatchEvents >= 0
-					return 2;
-				}
+				return result;
 			} catch {
 				ResetBatches ();
 
-				return 0;
+				return -1;
 			}
-		}
-
-		private string FilterRetention (long timestamp,
-		                                bool forceAll,
-		                                int currentReadBatch,
-		                                int currentWriteBatch)
-		{
-			long rdTs = GetBatchTimestamp (currentReadBatch);
-			if (!CheckRetention (timestamp, rdTs)) {
-				currentReadBatch = NextReadBatch (currentReadBatch, currentWriteBatch);
-
-				return ReadSerialized (timestamp, forceAll);
-			}
-
-			return SealBatch (currentReadBatch);
 		}
 
 		public string ReadSerialized (long timestamp,
 		                              bool forceAll = false)
 		{
-			int currRd = GetReadBatch ();
-			int currWr = GetWriteBatch ();
+			try {
+				int wr0 = GetWriteBatch ();
+				int wr = wr0;
+				int rd0 = GetReadBatch ();
+				int rd = rd0;
+				int wrEvents0 = GetWriteBatchEvents ();
+				int wrEvents = wrEvents0;
+				string result = "";
 
-			int diff = BatchesDiff (currWr, currRd);
-			if (diff == 0) {
-				if (forceAll) {
-					int currBatchEvents = GetCurrentBatchEvents ();
-					if (currBatchEvents == 0)
-						return "";
-					else {
-						string res = SealBatch (currRd);
-						return res;
-					}
-				} else
+				FilterRetention (timestamp, wr, ref rd, ref wrEvents);
+
+				if (IsEmpty (wr, rd) && (!forceAll || IsBatchEmpty (wrEvents)))
 					return "";
-			} else if (diff > 0) {
-				string res = FilterRetention (timestamp, forceAll, currRd, currWr);
-				return res;
-			}
 
-			return "";
+				result = SealBatch (rd);
+				previousReadBatch = rd;
+
+				if (IsEmpty (wr, rd))
+					IncWriteBatch (timestamp, ref wr, ref rd, ref wrEvents);
+
+				SetBatches (wr0, wr, rd0, rd, wrEvents0, wrEvents);
+
+				return result;
+			} catch {
+				ResetBatches ();
+
+				return "";
+			}
 		}
 
 		public bool CommitReadSerialized ()
 		{
-			int currRd = GetReadBatch ();
-			int currWr = GetWriteBatch ();
+			try {
+				int wr0 = GetWriteBatch ();
+				int wr = wr0;
+				int rd0 = GetReadBatch ();
+				int rd = rd0;
 
-			int nextRd = NextReadBatch (currRd, currWr);
-			bool nonEmpty = nextRd >= 0;
-			if (!nonEmpty)
-				ResetCurrentBatchEvents ();
-			return nonEmpty;
-		}
+				if (rd != previousReadBatch)
+					return true;
 
-		private void ResetBatches ()
-		{
-			ResetCurrentBatchEvents ();
-			ResetReadBatch ();
-			ResetWriteBatch ();
-		}
+				if (IsEmpty (wr, rd))
+					ResetWriteBatchEvents ();
+				else
+					rd = NextBatch (rd);
 
-		public void Reset ()
-		{
-			WriteUUID ("");
-			ResetBatches ();
+				SetBatches (wr0, wr, rd0, rd, -1, -1);
+
+				return true;
+			} catch {
+				ResetBatches ();
+
+				return false;
+			}
 		}
 
 	}

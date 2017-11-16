@@ -10,6 +10,10 @@
 
 		void SetGameId (string gameId);
 
+		string GetAutofireVersion ();
+
+		void SetAutofireVersion (string version);
+
 		string ReadUUID ();
 
 		bool WriteUUID (string guid);

@@ -19,6 +19,13 @@ namespace AutofireClient.Unity.Util
 			return Application.dataPath + @"/Autofire/Resources/gameid.txt";
 		}
 
+		internal static string GetGameIdAsset ()
+		{
+			TextAsset asset = (TextAsset)Resources.Load ("gameid");
+
+			return asset == null ? null : asset.text;
+		}
+
 		#if UNITY_EDITOR
 		private static string gameId;
 
@@ -83,11 +90,7 @@ namespace AutofireClient.Unity.Util
 
 		public static string GetGameId ()
 		{
-			if (!File.Exists (GetGameIdFile ()))
-				return null;
-			
-			string id = File.ReadAllText (GetGameIdFile ());
-			return id;
+			return GetGameIdAsset ();
 		}
 
 	}

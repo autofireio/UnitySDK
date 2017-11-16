@@ -25,7 +25,7 @@ namespace AutofireClient
 		private static bool isFlushing = false;
 		private static bool canExit = true;
 		private static bool httpSending = false;
-		// NOTE: set to 0 in order to send the INIT asap (bypass batching)
+		// NOTE: set to 0 in order to send the INIT asap (i.e, bypass batching for INIT)
 		private static long httpLastAttempt = GameEvent.NowFromEpoch ();
 		private static Header currentHeader;
 		private static string currentSerializedHeader;
@@ -44,12 +44,19 @@ namespace AutofireClient
 
 			lock (manageLock) {
 				logger.LogDebug ("Autofire HTTP response", response.ToString ());
+
 				willFlush = isFlushing;
 				httpSending = false;
 				if (response.IsDiscardable ())
 					hasNext = persistence.CommitReadSerialized ();
-				else
+				else {
 					hasNext = false;
+					if (isFlushing) {
+						isFlushing = false;
+						willFlush = isFlushing;
+						http.SetRequestTimeout (HTTP_REQUEST_TIMEOUT_SEC);
+					}
+				}
 				canExit = !hasNext;
 			}
 
@@ -75,10 +82,10 @@ namespace AutofireClient
 			}
 		}
 
-		public static void ToggleCheckExit ()
+		public static void SetCheckExit (bool checkExit)
 		{
 			lock (manageLock) {
-				checkExit = !checkExit;
+				SessionManager.checkExit = checkExit;
 			}
 		}
 
@@ -89,17 +96,17 @@ namespace AutofireClient
 			}
 		}
 
-		public static void setSendInterval (int intervalSecs)
+		public static void SetSendInterval (int intervalSecs)
 		{
 			lock (manageLock) {
 				if (intervalSecs <= MAX_SEND_INTERVAL_SEC)
-					SessionManager.sendIntervalSec = intervalSecs;
+					sendIntervalSec = intervalSecs;
 				else
-					SessionManager.sendIntervalSec = MAX_SEND_INTERVAL_SEC;
+					sendIntervalSec = MAX_SEND_INTERVAL_SEC;
 			}
 		}
 
-		public static void setURL (string url)
+		public static void SetURL (string url)
 		{
 			lock (manageLock) {
 				if (!string.IsNullOrEmpty (url))
@@ -124,14 +131,20 @@ namespace AutofireClient
 			requestHeaders.Add ("X-Autofire-Player-Id", playerId);
 		}
 
-		private static string GetUUID ()
+		private static string GetUUID (string hint)
 		{
 			string uuid = persistence.ReadUUID ();
 
-			if (string.IsNullOrEmpty (uuid)) {
-				uuid = guid.NewGUID ();
-				persistence.WriteUUID (uuid);
-			}
+			if (!string.IsNullOrEmpty (hint)) {
+				if (hint != uuid)
+					persistence.WriteUUID (hint);
+
+				return hint;
+			} else if (!string.IsNullOrEmpty (uuid))
+				return uuid;
+
+			uuid = guid.NewGUID ();
+			persistence.WriteUUID (uuid);
 
 			return uuid;
 		}
@@ -141,14 +154,25 @@ namespace AutofireClient
 			long initTs = 0L;
 
 			lock (manageLock) {
-				persistence.SetGameId (initializer.gameId);
 				initTs = initializer.timestamp;
 				string gameId = initializer.gameId;
 				string playerId = initializer.playerId;
-				if (string.IsNullOrEmpty (playerId))
-					playerId = GetUUID ();
-				else
-					persistence.WriteUUID (playerId);
+
+				persistence.SetGameId (gameId);
+				string ver = persistence.GetAutofireVersion ();
+
+				// NOTE: handle Autofire version update here
+				if (string.IsNullOrEmpty (ver) || ver != Version.VERSION) {
+					string guid = persistence.ReadUUID ();
+					persistence.Reset ();
+					if (!string.IsNullOrEmpty (guid))
+						persistence.WriteUUID (guid);
+				}
+
+				if (ver != Version.VERSION)
+					persistence.SetAutofireVersion (Version.VERSION);
+
+				playerId = GetUUID (playerId);
 
 				logger.LogDebug ("Autofire initializing with Game Id", gameId);
 				logger.LogDebug ("Autofire initializing with Player Id", playerId);
@@ -171,14 +195,13 @@ namespace AutofireClient
 
 			lock (manageLock) {
 				if (isInitialized && !httpSending && http.IsOnline ()) {
-					
 					payload = persistence.ReadSerialized (now, willFlush);
 					if (!string.IsNullOrEmpty (payload)) {
 						willPost = true;
+						httpLastAttempt = GameEvent.NowFromEpoch ();
+
 						logger.LogDebug ("Autofire HTTP request payload", payload);
 					}
-					if (willPost)
-						httpLastAttempt = GameEvent.NowFromEpoch ();
 					httpSending = willPost;
 					canExit = !willPost;
 				}
@@ -195,12 +218,10 @@ namespace AutofireClient
 
 			lock (manageLock) {
 				if (isInitialized) {
-					bool isInit = false;
 					bool forceBegin = false;
-					if (gameEvent.GetType () == typeof(Init)) {
-						isInit = true;
+					if (gameEvent.GetType () == typeof(Init))
 						forceBegin = true;
-					} else if (gameEvent.GetType () == typeof(Progress)) {
+					else if (gameEvent.GetType () == typeof(Progress)) {
 						Progress progress = (Progress)gameEvent;
 						currentHeader.atLevel = progress.GetLevel ();
 						currentSerializedHeader = json.JsonifyHeader (currentHeader.ToRaw ());
@@ -216,7 +237,7 @@ namespace AutofireClient
 						                   currentSerializedTags,
 						                   forceBegin,
 						                   forceEnd);
-					willSend = isInit || appendResult == 1;
+					willSend = appendResult == 1;
 				}
 			}
 
@@ -224,16 +245,49 @@ namespace AutofireClient
 				SendBatch (now, false);
 		}
 
-		private static void FlushEvents ()
+		private static void PrepareFlush ()
+		{
+			isFlushing = true;
+			persistence.PersistToDisk ();
+			http.SetRequestTimeout (5);
+		}
+
+		public static void FlushEvents ()
+		{
+			long now = GameEvent.NowFromEpoch ();
+
+			lock (manageLock) {
+				if (isInitialized)
+					PrepareFlush ();
+			}
+
+			SendBatch (now, true);
+		}
+
+		public static void Deinitialize (Initializer initializer = null)
 		{
 			bool willCheck = false;
 			long now = GameEvent.NowFromEpoch ();
 
+			GameEvent deinit = new Deinit ();
+
+			if (initializer != null)
+				deinit = deinit.WithTimestamp (initializer.timestamp);
+			string serializedEvent = json.JsonifyEvent (deinit.ToRaw ());
+
 			lock (manageLock) {
-				isFlushing = true;
-				persistence.PersistToDisk ();
-				http.SetRequestTimeout (5);
-				willCheck = checkExit;
+				if (isInitialized) {
+					// NOTE: best effort
+					persistence.WriteSerialized (
+						deinit.timestamp,
+						serializedEvent,
+						currentSerializedHeader,
+						currentSerializedTags,
+						false,
+						false);
+					PrepareFlush ();
+					willCheck = checkExit;
+				}
 			}
 
 			SendBatch (now, true);
@@ -254,28 +308,6 @@ namespace AutofireClient
 					System.Threading.Thread.Sleep (500);
 				}
 			}
-		}
-
-		public static void Deinitialize (Initializer initializer = null)
-		{
-			GameEvent deinit = new Deinit ();
-
-			if (initializer != null)
-				deinit = deinit.WithTimestamp (initializer.timestamp);
-			string serializedEvent = json.JsonifyEvent (deinit.ToRaw ());
-
-			lock (manageLock) {
-				if (isInitialized)
-					persistence.WriteSerialized (
-						deinit.timestamp,
-						serializedEvent,
-						currentSerializedHeader,
-						currentSerializedTags,
-						false,
-						false);
-			}
-
-			FlushEvents ();
 		}
 
 	}

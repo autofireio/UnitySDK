@@ -24,6 +24,11 @@ namespace AutofireClient.Unity
 			SessionManager.Initialize (new Initializer (gameId));
 		}
 
+		public void Flush ()
+		{
+			SessionManager.FlushEvents ();
+		}
+
 		public void Finish ()
 		{
 			SessionManager.Deinitialize ();
