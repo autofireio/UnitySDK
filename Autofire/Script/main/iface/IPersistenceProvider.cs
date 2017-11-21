@@ -1,4 +1,6 @@
-﻿namespace AutofireClient.Iface
+﻿using System.Collections.Generic;
+
+namespace AutofireClient.Iface
 {
 
 	public interface IPersistenceProvider
@@ -20,8 +22,8 @@
 
 		void SetRetention (long retentionInSecs);
 
-		int WriteSerialized (long timestamp,
-		                     string gameEvent,
+		int WriteSerialized (IEnumerable<string> gameEvents,
+		                     long timestamp,
 		                     string header,
 		                     string tags,
 		                     bool forceBegin = false,

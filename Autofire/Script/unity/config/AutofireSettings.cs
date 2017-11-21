@@ -14,14 +14,19 @@ namespace AutofireClient.Unity.Util
     public class AutofireSettings
 	{
 
+		private const string GAME_ID_FILE = "io.autofire.client.unity.gameid";
+		private const string GAME_ID_FILE_EXT = ".txt";
+
 		internal static string GetGameIdFile ()
 		{
-			return Application.dataPath + @"/Autofire/Resources/gameid.txt";
+			return Path.Combine (
+				AutofireEditorScript.GetSettingsPath (Application.dataPath),
+				GAME_ID_FILE + GAME_ID_FILE_EXT);
 		}
 
 		internal static string GetGameIdAsset ()
 		{
-			TextAsset asset = (TextAsset)Resources.Load ("gameid");
+			TextAsset asset = (TextAsset)Resources.Load (GAME_ID_FILE);
 
 			return asset == null ? null : asset.text;
 		}
@@ -53,9 +58,11 @@ namespace AutofireClient.Unity.Util
 
 		public void OnAutofireGUI ()
 		{
-			FileStream fs = new FileStream (Application.dataPath + @"/Autofire/Resources/autofire_logo.png",
-				                FileMode.Open,
-				                FileAccess.Read);
+			FileStream fs = new FileStream (
+				                Path.Combine (
+					                AutofireEditorScript.GetSettingsPath (Application.dataPath),
+					                "io.autofire.logo.png"),
+				                FileMode.Open, FileAccess.Read);
 			byte[] imageData = new byte[fs.Length];
 			fs.Read (imageData, 0, (int)fs.Length);
 			Texture2D logoTexture = new Texture2D (300, 92);

@@ -26,12 +26,12 @@ namespace AutofireClient.Util
 			return result;
 		}
 
-		public string JsonifyHeader (Dictionary<string, string> header)
+		public string JsonifyHeader (IDictionary<string, string> header)
 		{
 			return JsonifyDict (header, true);
 		}
 
-		public string JsonifyTags (List<string> tags)
+		public string JsonifyTags (IList<string> tags)
 		{
 			int count = tags.Count;
 			if (count == 0)
@@ -47,12 +47,19 @@ namespace AutofireClient.Util
 
 		public string JsonifyEvent (RawEvent rawEvent)
 		{
-			return "[" +
-				"\"" + rawEvent.name + "\",\"" + rawEvent.timestamp + "\"," +
+			string required = "\"" + rawEvent.name + "\",\"" + rawEvent.timestamp + "\"";
+			string optional = "";
+			if (rawEvent.nominals.Count != 0 ||
+			    rawEvent.integrals.Count != 0 ||
+			    rawEvent.fractionals.Count != 0) {
+
+				optional = "," +
 				JsonifyDict (rawEvent.nominals, true) + "," +
 				JsonifyDict (rawEvent.integrals, false) + "," +
-				JsonifyDict (rawEvent.fractionals, false) +
-				"]";
+				JsonifyDict (rawEvent.fractionals, false);
+			}
+
+			return "[" + required + optional + "]";
 		}
 
 	}

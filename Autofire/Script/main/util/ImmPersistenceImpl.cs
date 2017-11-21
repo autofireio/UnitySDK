@@ -1,4 +1,6 @@
-﻿using AutofireClient.Iface;
+﻿using System;
+using System.Collections.Generic;
+using AutofireClient.Iface;
 
 namespace AutofireClient.Util
 {
@@ -63,17 +65,22 @@ namespace AutofireClient.Util
 				ImmPersistenceImpl.retentionInSecs = BatchPersistence.ONE_WEEK_IN_SECS;
 		}
 
-		public int WriteSerialized (long timestamp,
-		                            string gameEvent,
+		public int WriteSerialized (IEnumerable<string> gameEvents,
+		                            long timestamp,
 		                            string header,
 		                            string tags,
 		                            bool forceBegin = false,
 		                            bool forceEnd = false)
 		{
+			string evts = "";
+			foreach (string gameEvent in gameEvents)
+				evts += gameEvent + ",";
+			evts = evts.Remove (evts.Length - 1);
+
 			evt = "{" +
 			"\"header\":" + header + "," +
 			"\"tags\":" + tags + "," +
-			"\"events\":[" + gameEvent + "]" +
+			"\"events\":[" + evts + "]" +
 			"}";
 			evtTs = timestamp;
 			q++;

@@ -1,5 +1,6 @@
 using UnityEngine;
 using AutofireClient.Event;
+using AutofireClient.Util;
 using AutofireClient.Unity.Util;
 
 namespace AutofireClient.Unity
@@ -7,8 +8,6 @@ namespace AutofireClient.Unity
 
 	public class Autofire : MonoBehaviour
 	{
-
-		private Manager autofire;
 
 		private string gameId;
 
@@ -19,25 +18,41 @@ namespace AutofireClient.Unity
 
 			gameId = AutofireSettings.GetGameId ();
 
-			autofire = gameObject.AddComponent<Manager> () as Manager;
-			DontDestroyOnLoad (this.gameObject);
+			DontDestroyOnLoad (gameObject);
 		}
 
 		void Start ()
 		{
 			if (!string.IsNullOrEmpty (gameId))
-				autofire.Initialize (gameId);
+				Initialize (gameId);
 		}
 
 		void OnApplicationPause (bool pauseStatus)
 		{
 			if (pauseStatus)
-				autofire.Flush ();
+				Flush ();
 		}
 
 		void OnApplicationQuit ()
 		{
-			autofire.Finish ();
+			Finish ();
+		}
+
+		public void Setup ()
+		{
+			SessionManager.SetProviders (
+				new LoggerImpl (),
+				new EnvironmentImpl (),
+				new PersistenceImpl (),
+				new DefaultGUIDImpl (),
+				new DefaultJSONImpl (),
+				gameObject.AddComponent<HTTPImpl> () as HTTPImpl);
+		}
+
+		public void Initialize (string gameId)
+		{
+			Setup ();
+			SessionManager.Initialize (new Initializer (gameId));
 		}
 
 		public static void Progress (string level, int score)
@@ -63,6 +78,16 @@ namespace AutofireClient.Unity
 		public static void Action (string what)
 		{
 			new Action (what).Send ();
+		}
+
+		public static void Flush ()
+		{
+			SessionManager.FlushEvents ();
+		}
+
+		public static void Finish ()
+		{
+			SessionManager.Deinitialize ();
 		}
 
 	}

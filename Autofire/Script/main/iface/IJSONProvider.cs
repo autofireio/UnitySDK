@@ -7,9 +7,9 @@ namespace AutofireClient.Iface
 	public interface IJSONProvider
 	{
 
-		string JsonifyHeader (Dictionary<string, string> header);
+		string JsonifyHeader (IDictionary<string, string> header);
 
-		string JsonifyTags (List<string> tags);
+		string JsonifyTags (IList<string> tags);
 
 		string JsonifyEvent (RawEvent rawEvent);
 

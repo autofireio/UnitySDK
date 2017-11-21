@@ -75,6 +75,8 @@ namespace AutofireClient
 				logger = loggerProvider;
 				environment = environmentProvider;
 				persistence = persistenceProvider;
+				if (!persistence.IsAvailable ())
+					persistence = new AutofireClient.Util.MemPersistenceImpl ();
 				guid = guidProvider;
 				json = jsonProvider;
 				http = httpProvider;
@@ -211,38 +213,52 @@ namespace AutofireClient
 				http.PostJSON (url, requestHeaders, payload, willFlush);
 		}
 
-		public static void SendEvent (GameEvent gameEvent)
+		public static void SendEvents (IEnumerable<GameEvent> gameEvents)
 		{
 			bool willSend = false;
 			long now = GameEvent.NowFromEpoch ();
 
 			lock (manageLock) {
 				if (isInitialized) {
+					long lastTimestamp = now;
 					bool forceBegin = false;
-					if (gameEvent.GetType () == typeof(Init))
-						forceBegin = true;
-					else if (gameEvent.GetType () == typeof(Progress)) {
-						Progress progress = (Progress)gameEvent;
-						currentHeader.atLevel = progress.GetLevel ();
-						currentSerializedHeader = json.JsonifyHeader (currentHeader.ToRaw ());
+					string atLevel = null;
+					List<string> serializedEvents = new List<string> ();
+					foreach (GameEvent gameEvent in gameEvents) {
+						if (gameEvent.GetType () == typeof(Init))
+							forceBegin = true;
+						else if (gameEvent.GetType () == typeof(Progress)) {
+							Progress progress = (Progress)gameEvent;
+							atLevel = progress.GetLevel ();
+						}
+						serializedEvents.Add (json.JsonifyEvent (gameEvent.ToRaw ()));
+						lastTimestamp = gameEvent.timestamp;
 					}
-					string serializedEvent = json.JsonifyEvent (gameEvent.ToRaw ());
-
 					bool forceEnd = now - httpLastAttempt > sendIntervalSec;
 
 					int appendResult = persistence.WriteSerialized (
-						                   gameEvent.timestamp,
-						                   serializedEvent,
+						                   serializedEvents,
+						                   lastTimestamp,
 						                   currentSerializedHeader,
 						                   currentSerializedTags,
 						                   forceBegin,
 						                   forceEnd);
 					willSend = appendResult == 1;
+
+					if (!string.IsNullOrEmpty (atLevel)) {
+						currentHeader.atLevel = atLevel;
+						currentSerializedHeader = json.JsonifyHeader (currentHeader.ToRaw ());
+					}
 				}
 			}
 
 			if (willSend)
 				SendBatch (now, false);
+		}
+
+		public static void SendEvent (GameEvent gameEvent)
+		{
+			SendEvents (new GameEvent[] { gameEvent });
 		}
 
 		private static void PrepareFlush ()
@@ -279,8 +295,8 @@ namespace AutofireClient
 				if (isInitialized) {
 					// NOTE: best effort
 					persistence.WriteSerialized (
+						new string[] { serializedEvent },
 						deinit.timestamp,
-						serializedEvent,
 						currentSerializedHeader,
 						currentSerializedTags,
 						false,

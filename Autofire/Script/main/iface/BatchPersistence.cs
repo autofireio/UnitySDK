@@ -1,4 +1,6 @@
-﻿namespace AutofireClient.Iface
+﻿using System.Collections.Generic;
+
+namespace AutofireClient.Iface
 {
 	
 	public abstract class BatchPersistence: IPersistenceProvider
@@ -184,12 +186,10 @@
 			return i;
 		}
 
-		private void AppendEvent (int writeBatch,
-		                          ref int writeBatchEvents,
-		                          string header,
-		                          string tags,
-		                          string gameEvent,
-		                          long timestamp)
+		private string BatchOf (int writeBatch,
+		                        int writeBatchEvents,
+		                        string header,
+		                        string tags)
 		{
 			string batchValue;
 			if (writeBatchEvents == 0)
@@ -197,12 +197,19 @@
 				"\"header\":" + header + "," +
 				"\"tags\":" + tags + "," +
 				"\"events\":[";
-			else {
+			else
 				batchValue = GetBatch (writeBatch);
+
+			return batchValue;
+		}
+
+		private void AppendEvent (ref string batchValue,
+		                          ref int writeBatchEvents,
+		                          string gameEvent)
+		{
+			if (writeBatchEvents > 0)
 				batchValue += ",";
-			}
 			batchValue += gameEvent;
-			SetBatchWithTimestamp (writeBatch, batchValue, timestamp);
 			writeBatchEvents++;
 		}
 
@@ -250,8 +257,8 @@
 				SetWriteBatchEvents (currentWriteBatchEvents);
 		}
 
-		public int WriteSerialized (long timestamp,
-		                            string gameEvent,
+		public int WriteSerialized (IEnumerable<string> gameEvents,
+		                            long timestamp,
 		                            string header,
 		                            string tags,
 		                            bool forceBegin = false,
@@ -273,14 +280,22 @@
 					result = 1;
 				}
 
-				AppendEvent (wr, ref wrEvents, header, tags, gameEvent, timestamp);
+				string batchValue = BatchOf (wr, wrEvents, header, tags);
+				foreach (string gameEvent in gameEvents) {
+					AppendEvent (ref batchValue, ref wrEvents, gameEvent);
 
-				if (IsBatchFull (wrEvents))
-					forceEnd = true;
-				if (forceEnd) {
-					IncWriteBatch (timestamp, ref wr, ref rd, ref wrEvents);
-					result = 1;
+					if (IsBatchFull (wrEvents))
+						forceEnd = true;
+					if (forceEnd) {
+						SetBatchWithTimestamp (wr, batchValue, timestamp);
+						IncWriteBatch (timestamp, ref wr, ref rd, ref wrEvents);
+						batchValue = BatchOf (wr, wrEvents, header, tags);
+						forceEnd = false;
+						result = 1;
+					}
 				}
+				if (wrEvents > 0)
+					SetBatchWithTimestamp (wr, batchValue, timestamp);
 
 				SetBatches (wr0, wr, rd0, rd, wrEvents0, wrEvents);
 

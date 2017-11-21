@@ -8,17 +8,17 @@ using UnityEditor;
 
 namespace AutofireClient.Unity.Util
 {
-	
+
 	#if UNITY_EDITOR
 	[InitializeOnLoad]
 	#endif
     public class AutofireEditorScript : ScriptableObject
 	{
-		
+
 		public const string GAME_ID_DEFAULT = "ENTER YOUR GAME ID";
 
+		public const string SETTINGS_PATH = @"Autofire/Resources";
 		const string SETTINGS_ASSET_NAME = "AutofireEditorScript";
-		const string SETTINGS_PATH = "Autofire/Resources";
 		const string SETTINGS_ASSET_EXT = ".asset";
 
 		private static AutofireEditorScript instance;
@@ -32,19 +32,26 @@ namespace AutofireClient.Unity.Util
 						// If not found, autocreate the asset object.
 						instance = CreateInstance<AutofireEditorScript> ();
 #if UNITY_EDITOR
-						string properPath = Path.Combine (Application.dataPath, SETTINGS_PATH);
-						if (!Directory.Exists (properPath))
-							AssetDatabase.CreateFolder ("Assets/Autofire", "Resources");
+						string properSettingsPath = GetSettingsPath (Application.dataPath);
+						if (!Directory.Exists (properSettingsPath))
+							AssetDatabase.CreateFolder (@"Assets/Autofire", "Resources");
 
-						string fullPath = Path.Combine (Path.Combine ("Assets", SETTINGS_PATH),
-							                  SETTINGS_ASSET_NAME + SETTINGS_ASSET_EXT);
-						AssetDatabase.CreateAsset (instance, fullPath);
+						AssetDatabase.CreateAsset (instance, fullAssetPath);
 #endif
 					}
 				}
 				return instance;
 			}
 		}
+
+		public static string GetSettingsPath (string fromPath)
+		{
+			return Path.Combine (fromPath, SETTINGS_PATH);
+		}
+
+		public static string fullSettingsPath = Path.Combine ("Assets", SETTINGS_PATH);
+		public static string fullAssetPath = Path.Combine (fullSettingsPath,
+			                                     SETTINGS_ASSET_NAME + SETTINGS_ASSET_EXT);
 
 		#if UNITY_EDITOR
 		private static Dictionary<string, string[]> fileList = new Dictionary<string, string[]> ();
@@ -103,14 +110,12 @@ namespace AutofireClient.Unity.Util
 		[MenuItem ("Window/Autofire/Remove Editor Script")]
 		public static void Remove ()
 		{
-			string fullPath = Path.Combine (Path.Combine ("Assets", SETTINGS_PATH),
-				                  SETTINGS_ASSET_NAME + SETTINGS_ASSET_EXT);
 			if (EditorUtility.DisplayDialog (
 				    "Confirmation",
 				    "Are you sure you want to remove Autofire from your project?",
 				    "Yes",
 				    "No")) {
-				AssetDatabase.DeleteAsset (fullPath);
+				AssetDatabase.DeleteAsset (fullAssetPath);
 				foreach (KeyValuePair<string, string[]> attachStat in fileList) {
 					RemoveModule (attachStat.Value);
 				}
@@ -166,20 +171,6 @@ namespace AutofireClient.Unity.Util
 			}
 
 			AssetDatabase.Refresh ();
-		}
-
-		public static void SetConfigValue (string prefix, string key, string value)
-		{
-			PlayerPrefs.SetString (PersistenceImpl.PREFIX + prefix + "." + key, value);
-			PlayerPrefs.Save ();
-		}
-
-		public static string GetConfigValue (string prefix, string key)
-		{
-			string value;
-			value = PlayerPrefs.GetString (PersistenceImpl.PREFIX + prefix + "." + key);
-			SetConfigValue (prefix, key, value);
-			return value.Length > 0 ? value : null;
 		}
 		#endif
 
