@@ -1,15 +1,17 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using AutofireClient.Event;
 using AutofireClient.Iface;
 
 namespace AutofireClient
 {
 
-	public class SessionManager
+	public static class SessionManager
 	{
 		
-		private const int MAX_SEND_INTERVAL_SEC = 120;
+		private const int MAX_SEND_INTERVAL_SEC = 90;
 		private const int HTTP_REQUEST_TIMEOUT_SEC = 10;
+		private const int HTTP_REQUEST_TIMEOUT_FLUSH_SEC = 5;
 
 		private static object manageLock = new object ();
 
@@ -17,10 +19,11 @@ namespace AutofireClient
 		private static IEnvironmentProvider environment;
 		private static IPersistenceProvider persistence;
 		private static IGUIDProvider guid;
-		private static IJSONProvider json;
+		private static IBatchEncoderProvider encoder;
 		private static IHTTPProvider http;
 
 		private static bool checkExit = false;
+		private static bool isSetUp = false;
 		private static bool isInitialized = false;
 		private static bool isFlushing = false;
 		private static bool canExit = true;
@@ -36,6 +39,16 @@ namespace AutofireClient
 		private static string url = "https://service.autofire.io/api/v1/command/clients/datapoints";
 		private static Dictionary<string, string> requestHeaders;
 
+		private static void WriteErrLine (string what)
+		{
+			Console.Error.WriteLine (what);
+		}
+
+		private static void WriteInitErrLine (string what)
+		{
+			WriteErrLine ("Autofire initialization error: " + what);
+		}
+
 		public static void HandleHTTPResponse (HelperHTTPResponse response)
 		{
 			bool hasNext = true;
@@ -43,44 +56,51 @@ namespace AutofireClient
 			long now = GameEvent.NowFromEpoch ();
 
 			lock (manageLock) {
-				logger.LogDebug ("Autofire HTTP response", response.ToString ());
+				if (isInitialized) {
+					logger.LogDebug ("Autofire HTTP response", response.ToString ());
 
-				willFlush = isFlushing;
-				httpSending = false;
-				if (response.IsDiscardable ())
-					hasNext = persistence.CommitReadSerialized ();
-				else {
-					hasNext = false;
-					if (isFlushing) {
-						isFlushing = false;
-						willFlush = isFlushing;
-						http.SetRequestTimeout (HTTP_REQUEST_TIMEOUT_SEC);
+					willFlush = isFlushing;
+					httpSending = false;
+					if (response.IsDiscardable ())
+						hasNext = persistence.CommitReadSerialized ();
+					else {
+						hasNext = false;
+						if (isFlushing) {
+							isFlushing = false;
+							willFlush = false;
+							http.SetRequestTimeout (HTTP_REQUEST_TIMEOUT_SEC);
+						}
 					}
+					canExit = !hasNext;
+				} else {
+					hasNext = false;
+
+					WriteInitErrLine ("Cannot handle HTTP response" + response.ToString ());
 				}
-				canExit = !hasNext;
 			}
 
 			if (hasNext)
 				SendBatch (now, willFlush);
 		}
 
-		public static void SetProviders (ILoggerProvider loggerProvider,
-		                                 IEnvironmentProvider environmentProvider,
-		                                 IPersistenceProvider persistenceProvider,
-		                                 IGUIDProvider guidProvider,
-		                                 IJSONProvider jsonProvider,
-		                                 IHTTPProvider httpProvider)
+		public static void SetProviders (ILoggerProvider logger,
+		                                 IEnvironmentProvider environment,
+		                                 IPersistenceProvider persistence,
+		                                 IGUIDProvider guid,
+		                                 IBatchEncoderProvider encoder,
+		                                 IHTTPProvider http)
 		{
 			lock (manageLock) {
-				logger = loggerProvider;
-				environment = environmentProvider;
-				persistence = persistenceProvider;
-				if (!persistence.IsAvailable ())
-					persistence = new AutofireClient.Util.MemPersistenceImpl ();
-				guid = guidProvider;
-				json = jsonProvider;
-				http = httpProvider;
-				http.SetRequestTimeout (HTTP_REQUEST_TIMEOUT_SEC);
+				SessionManager.logger = logger;
+				SessionManager.environment = environment;
+				SessionManager.persistence = persistence;
+				if (!SessionManager.persistence.IsAvailable ())
+					SessionManager.persistence = new AutofireClient.Util.MemPersistenceImpl ();
+				SessionManager.guid = guid;
+				SessionManager.encoder = encoder;
+				SessionManager.http = http;
+				SessionManager.http.SetRequestTimeout (HTTP_REQUEST_TIMEOUT_SEC);
+				isSetUp = true;
 			}
 		}
 
@@ -94,7 +114,10 @@ namespace AutofireClient
 		public static void SetRetention (long retentionInSecs)
 		{
 			lock (manageLock) {
-				persistence.SetRetention (retentionInSecs);
+				if (isSetUp)
+					persistence.SetRetention (retentionInSecs);
+				else
+					WriteInitErrLine ("Cannot set retention");
 			}
 		}
 
@@ -121,14 +144,14 @@ namespace AutofireClient
 		                                          Dictionary<string, string> headerFeatures, List<string> tags)
 		{
 			currentHeader = new Header (environment, headerFeatures, now, atLevel);
-			currentSerializedHeader = json.JsonifyHeader (currentHeader.ToRaw ());
+			currentSerializedHeader = encoder.EncodeHeader (currentHeader.ToRaw ());
 			currentTags = new List<string> ();
 			if (tags != null)
 				currentTags = new List<string> (tags);
-			currentSerializedTags = json.JsonifyTags (currentTags);
+			currentSerializedTags = encoder.EncodeTags (currentTags);
 
 			requestHeaders = new Dictionary<string, string> ();
-			requestHeaders.Add ("Content-Type", "application/json");
+			requestHeaders.Add ("Content-Type", encoder.GetContentType ());
 			requestHeaders.Add ("X-Autofire-Game-Id", gameId);
 			requestHeaders.Add ("X-Autofire-Player-Id", playerId);
 		}
@@ -156,34 +179,39 @@ namespace AutofireClient
 			long initTs = 0L;
 
 			lock (manageLock) {
-				initTs = initializer.timestamp;
-				string gameId = initializer.gameId;
-				string playerId = initializer.playerId;
+				if (isSetUp) {
+					initTs = initializer.timestamp;
+					string gameId = initializer.gameId;
+					string playerId = initializer.playerId;
 
-				persistence.SetGameId (gameId);
-				string ver = persistence.GetAutofireVersion ();
+					persistence.SetGameId (gameId);
+					string ver = persistence.GetAutofireVersion ();
 
-				// NOTE: handle Autofire version update here
-				if (string.IsNullOrEmpty (ver) || ver != Version.VERSION) {
-					string guid = persistence.ReadUUID ();
-					persistence.Reset ();
-					if (!string.IsNullOrEmpty (guid))
-						persistence.WriteUUID (guid);
-				}
+					// NOTE: handle Autofire version update here
+					if (string.IsNullOrEmpty (ver) || ver != Version.VERSION) {
+						string guid = persistence.ReadUUID ();
+						persistence.Reset ();
+						if (!string.IsNullOrEmpty (guid))
+							persistence.WriteUUID (guid);
+					}
 
-				if (ver != Version.VERSION)
-					persistence.SetAutofireVersion (Version.VERSION);
+					if (ver != Version.VERSION)
+						persistence.SetAutofireVersion (Version.VERSION);
 
-				playerId = GetUUID (playerId);
+					playerId = GetUUID (playerId);
+					if (string.IsNullOrEmpty (playerId))
+						playerId = "nobody";
 
-				logger.LogDebug ("Autofire initializing with Game Id", gameId);
-				logger.LogDebug ("Autofire initializing with Player Id", playerId);
+					logger.LogDebug ("Autofire initializing with Game Id", gameId);
+					logger.LogDebug ("Autofire initializing with Player Id", playerId);
 
-				InitializeParameters (
-					gameId, playerId,
-					initTs, "",
-					initializer.headers, initializer.tags);
-				isInitialized = true;
+					InitializeParameters (
+						gameId, playerId,
+						initTs, "",
+						initializer.headers, initializer.tags);
+					isInitialized = true;
+				} else
+					WriteInitErrLine ("Not properly set up");
 			}
 
 			GameEvent init = new Init ().WithTimestamp (initTs);
@@ -197,7 +225,11 @@ namespace AutofireClient
 
 			lock (manageLock) {
 				if (isInitialized && !httpSending && http.IsOnline ()) {
-					payload = persistence.ReadSerialized (now, willFlush);
+					payload = persistence.ReadSerialized (
+						now,
+						encoder.GetEventsEnd (),
+						encoder.GetBatchEnd (),
+						willFlush);
 					if (!string.IsNullOrEmpty (payload)) {
 						willPost = true;
 						httpLastAttempt = GameEvent.NowFromEpoch ();
@@ -210,7 +242,7 @@ namespace AutofireClient
 			}
 
 			if (willPost)
-				http.PostJSON (url, requestHeaders, payload, willFlush);
+				http.PostData (url, requestHeaders, payload, willFlush);
 		}
 
 		public static void SendEvents (IEnumerable<GameEvent> gameEvents)
@@ -231,25 +263,29 @@ namespace AutofireClient
 							Progress progress = (Progress)gameEvent;
 							atLevel = progress.GetLevel ();
 						}
-						serializedEvents.Add (json.JsonifyEvent (gameEvent.ToRaw ()));
+						serializedEvents.Add (encoder.EncodeEvent (gameEvent.ToRaw ()));
 						lastTimestamp = gameEvent.timestamp;
 					}
 					bool forceEnd = now - httpLastAttempt > sendIntervalSec;
 
 					int appendResult = persistence.WriteSerialized (
-						                   serializedEvents,
-						                   lastTimestamp,
+						                   encoder.GetSeparator (),
+						                   encoder.GetBatchBegin (),
 						                   currentSerializedHeader,
 						                   currentSerializedTags,
+						                   encoder.GetEventsBegin (),
+						                   serializedEvents,
+						                   lastTimestamp,
 						                   forceBegin,
 						                   forceEnd);
 					willSend = appendResult == 1;
 
 					if (!string.IsNullOrEmpty (atLevel)) {
 						currentHeader.atLevel = atLevel;
-						currentSerializedHeader = json.JsonifyHeader (currentHeader.ToRaw ());
+						currentSerializedHeader = encoder.EncodeHeader (currentHeader.ToRaw ());
 					}
-				}
+				} else
+					WriteInitErrLine ("Cannot send events");
 			}
 
 			if (willSend)
@@ -261,11 +297,19 @@ namespace AutofireClient
 			SendEvents (new GameEvent[] { gameEvent });
 		}
 
+		public static void PersistToDisk ()
+		{
+			if (isInitialized)
+				persistence.PersistToDisk ();
+			else
+				WriteInitErrLine ("Cannot persist to disk");
+		}
+
 		private static void PrepareFlush ()
 		{
 			isFlushing = true;
-			persistence.PersistToDisk ();
-			http.SetRequestTimeout (5);
+			PersistToDisk ();
+			http.SetRequestTimeout (HTTP_REQUEST_TIMEOUT_FLUSH_SEC);
 		}
 
 		public static void FlushEvents ()
@@ -275,6 +319,8 @@ namespace AutofireClient
 			lock (manageLock) {
 				if (isInitialized)
 					PrepareFlush ();
+				else
+					WriteInitErrLine ("Cannot flush events");
 			}
 
 			SendBatch (now, true);
@@ -289,21 +335,27 @@ namespace AutofireClient
 
 			if (initializer != null)
 				deinit = deinit.WithTimestamp (initializer.timestamp);
-			string serializedEvent = json.JsonifyEvent (deinit.ToRaw ());
 
 			lock (manageLock) {
 				if (isInitialized) {
+					string serializedEvent = encoder.EncodeEvent (deinit.ToRaw ());
+
 					// NOTE: best effort
 					persistence.WriteSerialized (
-						new string[] { serializedEvent },
-						deinit.timestamp,
+						encoder.GetSeparator (),
+						encoder.GetBatchBegin (),
 						currentSerializedHeader,
 						currentSerializedTags,
+						encoder.GetEventsBegin (),
+						new string[] { serializedEvent },
+						deinit.timestamp,
 						false,
 						false);
 					PrepareFlush ();
 					willCheck = checkExit;
-				}
+					// NOTE: don't set isInitialized to false, due to pending batches over HTTP
+				} else
+					WriteErrLine ("Autofire de-initialization error: Not initialized");
 			}
 
 			SendBatch (now, true);
@@ -311,7 +363,7 @@ namespace AutofireClient
 			if (willCheck) {
 				//
 				// NOTE: if a previous async request hasn't finished and
-				//       the host environment exits, we have to wait
+				//       the host environment exits, we have to wait.
 				//       Make sure Unity doesn't execute this!
 				//
 				bool done = false;

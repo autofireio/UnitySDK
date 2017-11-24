@@ -8,12 +8,12 @@ namespace AutofireClient.Util
 	public class ImmPersistenceImpl : IPersistenceProvider
 	{
 
-		private static string version = "";
-		private static string uuid = "nobody";
-		private static string evt = "";
-		private static long evtTs = 0L;
-		private static int q = 0;
 		private static long retentionInSecs = BatchPersistence.ONE_WEEK_IN_SECS;
+		private static string version = "";
+		private string uuid = "";
+		private string batch = "";
+		private long batchTs = 0L;
+		private int q = 0;
 
 		public bool IsAvailable ()
 		{
@@ -22,18 +22,14 @@ namespace AutofireClient.Util
 
 		private void ResetEvt ()
 		{
-			evt = "";
-			evtTs = 0L;
+			batch = "";
+			batchTs = 0L;
 		}
 
 		public void Reset ()
 		{
 			uuid = "";
 			ResetEvt ();
-		}
-
-		public void SetGameId (string gameId)
-		{
 		}
 
 		public string GetAutofireVersion ()
@@ -44,6 +40,10 @@ namespace AutofireClient.Util
 		public void SetAutofireVersion (string version)
 		{
 			ImmPersistenceImpl.version = version;
+		}
+
+		public void SetGameId (string gameId)
+		{
 		}
 
 		public string ReadUUID ()
@@ -65,24 +65,31 @@ namespace AutofireClient.Util
 				ImmPersistenceImpl.retentionInSecs = BatchPersistence.ONE_WEEK_IN_SECS;
 		}
 
-		public int WriteSerialized (IEnumerable<string> gameEvents,
-		                            long timestamp,
+		public int WriteSerialized (string separator,
+		                            string beginBatch,
 		                            string header,
 		                            string tags,
+		                            string beginEvents,
+		                            IEnumerable<string> gameEvents,
+		                            long timestamp,
 		                            bool forceBegin = false,
 		                            bool forceEnd = false)
 		{
-			string evts = "";
+			string evts = beginEvents;
+			int i = 0;
 			foreach (string gameEvent in gameEvents)
-				evts += gameEvent + ",";
-			evts = evts.Remove (evts.Length - 1);
+				if (!string.IsNullOrEmpty (gameEvent)) {
+					evts += gameEvent + separator;
+					i++;
+				}
+			if (i > 0)
+				evts = evts.Remove (evts.Length - 1);
 
-			evt = "{" +
-			"\"header\":" + header + "," +
-			"\"tags\":" + tags + "," +
-			"\"events\":[" + evts + "]" +
-			"}";
-			evtTs = timestamp;
+			batch = beginBatch +
+			header + separator +
+			tags + separator +
+			evts;
+			batchTs = timestamp;
 			q++;
 			if (q < 0)
 				q = 1;
@@ -96,13 +103,18 @@ namespace AutofireClient.Util
 		}
 
 		public string ReadSerialized (long timestamp,
+		                              string endEvents,
+		                              string endBatch,
 		                              bool forceAll = false)
 		{
-			if (!IsInRetention (timestamp, evtTs))
+			if (string.IsNullOrEmpty (batch))
+				return "";
+
+			if (!IsInRetention (timestamp, batchTs))
 				ResetEvt ();
 			q--;
 
-			return evt;
+			return batch + endEvents + endBatch;
 		}
 
 		public bool CommitReadSerialized ()

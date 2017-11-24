@@ -10,11 +10,11 @@ namespace AutofireClient.Iface
 
 		void Reset ();
 
-		void SetGameId (string gameId);
-
 		string GetAutofireVersion ();
 
 		void SetAutofireVersion (string version);
+
+		void SetGameId (string gameId);
 
 		string ReadUUID ();
 
@@ -22,14 +22,19 @@ namespace AutofireClient.Iface
 
 		void SetRetention (long retentionInSecs);
 
-		int WriteSerialized (IEnumerable<string> gameEvents,
-		                     long timestamp,
+		int WriteSerialized (string separator,
+		                     string beginBatch,
 		                     string header,
 		                     string tags,
+		                     string beginEvents,
+		                     IEnumerable<string> gameEvents,
+		                     long timestamp,
 		                     bool forceBegin = false,
 		                     bool forceEnd = false);
 
 		string ReadSerialized (long timestamp,
+		                       string endEvents,
+		                       string endBatch,
 		                       bool forceAll = false);
 
 		bool CommitReadSerialized ();

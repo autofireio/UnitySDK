@@ -36,7 +36,7 @@ namespace AutofireClient.Util
 		{
 		}
 
-		public override void PostJSON (string url,
+		public override void PostData (string url,
 		                               Dictionary<string, string> headers,
 		                               string body,
 		                               bool forceSync = false)

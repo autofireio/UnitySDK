@@ -30,7 +30,7 @@ namespace AutofireClient.Unity
 		void OnApplicationPause (bool pauseStatus)
 		{
 			if (pauseStatus)
-				Flush ();
+				SessionManager.PersistToDisk ();
 		}
 
 		void OnApplicationQuit ()
@@ -43,9 +43,9 @@ namespace AutofireClient.Unity
 			SessionManager.SetProviders (
 				new LoggerImpl (),
 				new EnvironmentImpl (),
-				new PersistenceImpl (),
+				new PrefsPersistenceImpl (),
 				new DefaultGUIDImpl (),
-				new DefaultJSONImpl (),
+				new DefaultJSONEncoderImpl (),
 				gameObject.AddComponent<HTTPImpl> () as HTTPImpl);
 		}
 
@@ -57,27 +57,27 @@ namespace AutofireClient.Unity
 
 		public static void Progress (string level, int score)
 		{
-			new Progress (level, score).Send ();
+			SessionManager.SendEvent (new Progress (level, score));
 		}
 
 		public static void Monetize (string item, int ac, int qty)
 		{
-			new Monetize (item, ac, qty).Send ();
+			SessionManager.SendEvent (new Monetize (item, ac, qty));
 		}
 
 		public static void Monetize (string item, int ac)
 		{
-			Autofire.Monetize (item, ac, 1);
+			Monetize (item, ac, 1);
 		}
 
 		public static void Resource (string name, int qty)
 		{
-			new Resource (name, qty).Send ();
+			SessionManager.SendEvent (new Resource (name, qty));
 		}
 
 		public static void Action (string what)
 		{
-			new Action (what).Send ();
+			SessionManager.SendEvent (new Action (what));
 		}
 
 		public static void Flush ()

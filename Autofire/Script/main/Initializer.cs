@@ -85,16 +85,6 @@ namespace AutofireClient
 			return this;
 		}
 
-		public void Initialize ()
-		{
-			SessionManager.Initialize (this);
-		}
-
-		public void Deinitialize ()
-		{
-			SessionManager.Deinitialize (this);
-		}
-
 	}
 
 }

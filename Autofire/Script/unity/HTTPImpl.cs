@@ -86,7 +86,7 @@ namespace AutofireClient.Unity
 			DoResponse (www);
 		}
 
-		public void PostJSON (string url,
+		public void PostData (string url,
 		                      Dictionary<string, string> headers,
 		                      string body,
 		                      bool forceSync = false)

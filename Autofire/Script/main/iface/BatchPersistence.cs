@@ -46,7 +46,7 @@ namespace AutofireClient.Iface
 		protected static int maxBatches = 16;
 		protected static long retentionInSecs = ONE_WEEK_IN_SECS;
 
-		private static int previousReadBatch = -1;
+		private int previousReadBatch = -1;
 
 		public void SetGameId (string gameId)
 		{
@@ -188,15 +188,18 @@ namespace AutofireClient.Iface
 
 		private string BatchOf (int writeBatch,
 		                        int writeBatchEvents,
+		                        string separator,
+		                        string beginBatch,
 		                        string header,
-		                        string tags)
+		                        string tags,
+		                        string beginEvents)
 		{
 			string batchValue;
 			if (writeBatchEvents == 0)
-				batchValue = "{" +
-				"\"header\":" + header + "," +
-				"\"tags\":" + tags + "," +
-				"\"events\":[";
+				batchValue = beginBatch +
+				header + separator +
+				tags + separator +
+				beginEvents;
 			else
 				batchValue = GetBatch (writeBatch);
 
@@ -205,22 +208,28 @@ namespace AutofireClient.Iface
 
 		private void AppendEvent (ref string batchValue,
 		                          ref int writeBatchEvents,
-		                          string gameEvent)
+		                          string gameEvent,
+		                          string separator)
 		{
-			if (writeBatchEvents > 0)
-				batchValue += ",";
-			batchValue += gameEvent;
-			writeBatchEvents++;
+			if (!string.IsNullOrEmpty (gameEvent)) {
+				if (writeBatchEvents > 0)
+					batchValue += separator;
+				batchValue += gameEvent;
+				writeBatchEvents++;
+			}
 		}
 
-		private string SealBatch (int readBatch)
+		private string SealBatch (int readBatch,
+		                          string endEvents,
+		                          string endBatch)
 		{
+			string last = endEvents + endBatch;
 			string batchValue = GetBatch (readBatch);
 			if (string.IsNullOrEmpty (batchValue))
 				return "";
 
-			if (!batchValue.EndsWith ("]}")) {
-				batchValue += "]}";
+			if (!batchValue.EndsWith (last)) {
+				batchValue += last;
 				SetBatch (readBatch, batchValue);
 			}
 
@@ -257,10 +266,13 @@ namespace AutofireClient.Iface
 				SetWriteBatchEvents (currentWriteBatchEvents);
 		}
 
-		public int WriteSerialized (IEnumerable<string> gameEvents,
-		                            long timestamp,
+		public int WriteSerialized (string separator,
+		                            string beginBatch,
 		                            string header,
 		                            string tags,
+		                            string beginEvents,
+		                            IEnumerable<string> gameEvents,
+		                            long timestamp,
 		                            bool forceBegin = false,
 		                            bool forceEnd = false)
 		{
@@ -280,16 +292,16 @@ namespace AutofireClient.Iface
 					result = 1;
 				}
 
-				string batchValue = BatchOf (wr, wrEvents, header, tags);
+				string batchValue = BatchOf (wr, wrEvents, separator, beginBatch, header, tags, beginEvents);
 				foreach (string gameEvent in gameEvents) {
-					AppendEvent (ref batchValue, ref wrEvents, gameEvent);
+					AppendEvent (ref batchValue, ref wrEvents, gameEvent, separator);
 
 					if (IsBatchFull (wrEvents))
 						forceEnd = true;
 					if (forceEnd) {
 						SetBatchWithTimestamp (wr, batchValue, timestamp);
 						IncWriteBatch (timestamp, ref wr, ref rd, ref wrEvents);
-						batchValue = BatchOf (wr, wrEvents, header, tags);
+						batchValue = BatchOf (wr, wrEvents, separator, beginBatch, header, tags, beginEvents);
 						forceEnd = false;
 						result = 1;
 					}
@@ -308,6 +320,8 @@ namespace AutofireClient.Iface
 		}
 
 		public string ReadSerialized (long timestamp,
+		                              string endEvents,
+		                              string endBatch,
 		                              bool forceAll = false)
 		{
 			try {
@@ -324,7 +338,7 @@ namespace AutofireClient.Iface
 				if (IsEmpty (wr, rd) && (!forceAll || IsBatchEmpty (wrEvents)))
 					return "";
 
-				result = SealBatch (rd);
+				result = SealBatch (rd, endEvents, endBatch);
 				previousReadBatch = rd;
 
 				if (IsEmpty (wr, rd))

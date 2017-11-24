@@ -7,12 +7,12 @@ namespace AutofireClient.Util
 	{
 
 		private static string version = "";
-		private static string uuid = "nobody";
-		private static string[] batches = new string[MAX_BATCHES];
-		private static long[] batchTimestamps = new long[MAX_BATCHES];
-		private static int readBatch = 0;
-		private static int writeBatch = 0;
-		private static int writeBatchEvents = 0;
+		private string uuid = "";
+		private string[] batches = new string[MAX_BATCHES];
+		private long[] batchTimestamps = new long[MAX_BATCHES];
+		private int readBatch = 0;
+		private int writeBatch = 0;
+		private int writeBatchEvents = 0;
 
 		public override bool IsAvailable ()
 		{
@@ -36,7 +36,7 @@ namespace AutofireClient.Util
 
 		public override bool WriteUUID (string uuid)
 		{
-			MemPersistenceImpl.uuid = uuid;
+			this.uuid = uuid;
 
 			return true;
 		}
@@ -69,7 +69,7 @@ namespace AutofireClient.Util
 
 		protected override void SetWriteBatchEvents (int writeBatchEvents)
 		{
-			MemPersistenceImpl.writeBatchEvents = writeBatchEvents;
+			this.writeBatchEvents = writeBatchEvents;
 		}
 
 		protected override int GetReadBatch ()
@@ -79,7 +79,7 @@ namespace AutofireClient.Util
 
 		protected override void SetReadBatch (int readBatch)
 		{
-			MemPersistenceImpl.readBatch = readBatch;
+			this.readBatch = readBatch;
 		}
 
 		protected override int GetWriteBatch ()
@@ -89,7 +89,7 @@ namespace AutofireClient.Util
 
 		protected override void SetWriteBatch (int writeBatch)
 		{
-			MemPersistenceImpl.writeBatch = writeBatch;
+			this.writeBatch = writeBatch;
 		}
 
 		public override bool PersistToDisk ()

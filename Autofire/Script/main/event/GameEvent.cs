@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 
 namespace AutofireClient.Event
 {
@@ -18,8 +19,6 @@ namespace AutofireClient.Event
 		internal const string EMPTY_STRING = "_EMPTY";
 
 		private const int MAX_FEATURES = 0;
-
-		internal const string INIT_NAME = "INIT";
 
 		internal string name;
 		internal long timestamp;
@@ -56,6 +55,7 @@ namespace AutofireClient.Event
 
 		private static string Sanitize (string str, int len)
 		{
+			str = Regex.Replace (str, @"[^\u0020-\u007F]+", string.Empty);
 			return OnNonEmpty (Left (str.Trim (), len))
 				.Replace (SEPARATOR, "_")
 				.Replace (ASSIGNMENT, "_");
@@ -142,11 +142,6 @@ namespace AutofireClient.Event
 
 			fractionals.Add (SanitizeKey (key), value);
 			return this;
-		}
-
-		public void Send ()
-		{
-			SessionManager.SendEvent (this);
 		}
 
 		internal RawEvent ToRaw ()

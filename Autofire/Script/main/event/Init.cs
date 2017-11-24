@@ -5,7 +5,7 @@
 	{
 
 		public Init () :
-			base (GameEvent.INIT_NAME)
+			base ("INIT")
 		{
 		}
 

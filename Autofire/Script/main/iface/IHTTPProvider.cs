@@ -10,7 +10,7 @@ namespace AutofireClient.Iface
 
 		void SetRequestTimeout (int secs);
 
-		void PostJSON (string url,
+		void PostData (string url,
 		               Dictionary<string, string> headers,
 		               string body,
 		               bool forceSync = false);
