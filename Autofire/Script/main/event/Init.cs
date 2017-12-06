@@ -4,8 +4,10 @@
 	internal class Init : GameEvent
 	{
 
+		public const string INIT_NAME = "INIT";
+
 		public Init () :
-			base ("INIT")
+			base (INIT_NAME)
 		{
 		}
 

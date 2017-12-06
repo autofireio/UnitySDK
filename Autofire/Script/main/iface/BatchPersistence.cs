@@ -331,7 +331,7 @@ namespace AutofireClient.Iface
 				int rd = rd0;
 				int wrEvents0 = GetWriteBatchEvents ();
 				int wrEvents = wrEvents0;
-				string result = "";
+				string result;
 
 				FilterRetention (timestamp, wr, ref rd, ref wrEvents);
 

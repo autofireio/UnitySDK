@@ -88,6 +88,7 @@ namespace AutofireClient.Unity
 		public static void Finish ()
 		{
 			SessionManager.Deinitialize ();
+			SessionManager.Shutdown ();
 		}
 
 	}

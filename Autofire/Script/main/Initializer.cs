@@ -4,7 +4,7 @@ using AutofireClient.Event;
 namespace AutofireClient
 {
 
-	public class Initializer
+	public sealed class Initializer
 	{
 
 		private const int MAX_HEADERS = 0;

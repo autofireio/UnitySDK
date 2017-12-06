@@ -82,19 +82,22 @@ namespace AutofireClient.Util
 					evts += gameEvent + separator;
 					i++;
 				}
-			if (i > 0)
+			if (i > 0) {
 				evts = evts.Remove (evts.Length - 1);
 
-			batch = beginBatch +
-			header + separator +
-			tags + separator +
-			evts;
-			batchTs = timestamp;
-			q++;
-			if (q < 0)
-				q = 1;
+				batch = beginBatch +
+				header + separator +
+				tags + separator +
+				evts;
+				batchTs = timestamp;
+				q++;
+				if (q < 0)
+					q = 1;
 
-			return 1;
+				return 1;
+			}
+
+			return 0;
 		}
 
 		private bool IsInRetention (long now, long timestamp)

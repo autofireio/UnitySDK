@@ -11,8 +11,9 @@ namespace AutofireClient.Event
 		public static readonly DateTime EPOCH = new DateTime (1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 		public const string DATETIME_FORMATTER = "yyyy-MM-ddTHH:mm:sszzz";
 
-		private const string SEPARATOR = "/";
-		private const string ASSIGNMENT = "=";
+		private const char SEPARATOR = '/';
+		private const char ASSIGNMENT = '=';
+		private const char TAB = '\t';
 		private const int MAX_NAME_LEN = 32;
 		private const int MAX_KEY_LEN = 64;
 		private const int MAX_NOMINAL_VALUE_LEN = 64;
@@ -50,15 +51,16 @@ namespace AutofireClient.Event
 			if (length >= input.Length)
 				return input;
 			else
-				return input.Substring (length);
+				return input.Substring (0, length);
 		}
 
 		private static string Sanitize (string str, int len)
 		{
 			str = Regex.Replace (str, @"[^\u0020-\u007F]+", string.Empty);
 			return OnNonEmpty (Left (str.Trim (), len))
-				.Replace (SEPARATOR, "_")
-				.Replace (ASSIGNMENT, "_");
+				.Replace (SEPARATOR, '_')
+				.Replace (ASSIGNMENT, '_')
+				.Replace (TAB, ' ');
 		}
 
 		internal static string SanitizeName (string name)
@@ -156,6 +158,10 @@ namespace AutofireClient.Event
 			return raw;
 		}
 
+		public override string ToString ()
+		{
+			return ToRaw ().ToString ();
+		}
 	}
 
 }

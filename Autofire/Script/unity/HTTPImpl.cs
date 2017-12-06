@@ -48,13 +48,16 @@ namespace AutofireClient.Unity
 			return ret;
 		}
 
-		private void HandleHTTPResponse (int statusCode, string responseBody)
+		private void HandleHTTPResponse (HelperHTTPResponseHandler responseHandler,
+		                                 int code,
+		                                 string body)
 		{
-			HelperHTTPResponse resp = new HelperHTTPResponse (statusCode, responseBody);
-			SessionManager.HandleHTTPResponse (resp);
+			HelperHTTPResponse response = new HelperHTTPResponse (code, body);
+			responseHandler.HandleResponse (response);
 		}
 
-		private void DoResponse (WWW www)
+		private void DoResponse (HelperHTTPResponseHandler responseHandler,
+		                         WWW www)
 		{
 			int code = 0;
 			string body = "";
@@ -67,37 +70,48 @@ namespace AutofireClient.Unity
 				body = www.error;
 			}
 
-			HandleHTTPResponse (code, body);
+			HandleHTTPResponse (responseHandler, code, body);
 		}
 
 		// reference: http://blog.cyberiansoftware.com.ar/post/142258870245/synchronous-web-request-using-unity3d-api
-		private IEnumerator SyncFlushEvents (WWW www)
+		private IEnumerator SyncFlushEvents (HelperHTTPResponseHandler responseHandler,
+		                                     WWW www)
 		{
 			while (!www.isDone)
 				yield return www;
 
-			DoResponse (www);
+			DoResponse (responseHandler, www);
 		}
 
-		private IEnumerator ContinueFlushEvents (WWW www)
+		private IEnumerator ContinueFlushEvents (HelperHTTPResponseHandler responseHandler,
+		                                         WWW www)
 		{
 			yield return www;
 
-			DoResponse (www);
+			DoResponse (responseHandler, www);
 		}
 
-		public void PostData (string url,
+		public void PostData (HelperHTTPResponseHandler responseHandler,
+		                      string url,
+		                      string contentType,
+		                      string acceptType,
 		                      Dictionary<string, string> headers,
 		                      string body,
 		                      bool forceSync = false)
 		{
 			byte[] data = Encoding.ASCII.GetBytes (body.ToCharArray ());
+			Dictionary<string, string> headers2 = new Dictionary<string, string> (headers);
+			if (!string.IsNullOrEmpty (contentType))
+				headers2.Add ("Content-Type", contentType);
+			if (!string.IsNullOrEmpty (acceptType))
+				headers2.Add ("Accept", acceptType);
+
 			WWW www = new WWW (url, data, headers);
 			if (!forceSync)
-				StartCoroutine (ContinueFlushEvents (www));
+				StartCoroutine (ContinueFlushEvents (responseHandler, www));
 			else {
 				long strt = AutofireClient.Event.GameEvent.NowFromEpoch ();
-				IEnumerator e = SyncFlushEvents (www);
+				IEnumerator e = SyncFlushEvents (responseHandler, www);
 				while (e.MoveNext ()) {
 					if (AutofireClient.Event.GameEvent.NowFromEpoch () - strt >= timeoutHint)
 						break;

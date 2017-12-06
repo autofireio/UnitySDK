@@ -7,7 +7,7 @@ namespace AutofireClient
 {
 
 	[Serializable]
-	internal class Header
+	internal sealed class Header
 	{
 
 		public const string PLATFORM_KEY = "platform";
@@ -66,10 +66,7 @@ namespace AutofireClient
 			this.initTimestamp = initTimestamp;
 			this.atLevel = GameEvent.SanitizeNominalValue (atLevel);
 
-			if (features != null)
-				this.features = new Dictionary<string, string> (features);
-			else
-				this.features = new Dictionary<string, string> ();
+			this.features = new Dictionary<string, string> (features);
 		}
 
 		private bool TryAdd (Dictionary<string, string> to, string key, string value)

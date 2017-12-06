@@ -92,7 +92,7 @@ namespace AutofireClient.Iface
 				File.Delete (file);
 
 				return true;
-			} catch (Exception) {
+			} catch {
 				return false;
 			}
 		}

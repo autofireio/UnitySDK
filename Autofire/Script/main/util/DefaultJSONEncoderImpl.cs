@@ -18,9 +18,9 @@ namespace AutofireClient.Util
 		public const string SEPARATOR = ",";
 		public const string ASSIGNMENT = ":";
 
-		private string headerLabel = DefaultJSONEncoderImpl.StringifyStringValue ("header");
-		private string tagsLabel = DefaultJSONEncoderImpl.StringifyStringValue ("tags");
-		private string eventsLabel = DefaultJSONEncoderImpl.StringifyStringValue ("events");
+		private string headerLabel = StringifyStringValue ("header");
+		private string tagsLabel = StringifyStringValue ("tags");
+		private string eventsLabel = StringifyStringValue ("events");
 
 		public string GetContentType ()
 		{
@@ -50,8 +50,8 @@ namespace AutofireClient.Util
 				if (i > 0)
 					result += SEPARATOR;
 				if (isStringValue)
-					v = DefaultJSONEncoderImpl.StringifyStringValue (v);
-				result += DefaultJSONEncoderImpl.StringifyStringValue (k) + ASSIGNMENT + v;
+					v = StringifyStringValue (v);
+				result += StringifyStringValue (k) + ASSIGNMENT + v;
 				i++;
 			}
 
@@ -77,7 +77,7 @@ namespace AutofireClient.Util
 				if (i > 0)
 					result += SEPARATOR;
 				if (isStringValue)
-					v = DefaultJSONEncoderImpl.StringifyStringValue (v);
+					v = StringifyStringValue (v);
 				result += v;
 				i++;
 			}
@@ -102,9 +102,9 @@ namespace AutofireClient.Util
 			if (rawEvent == null)
 				return "";
 			
-			string required = DefaultJSONEncoderImpl.StringifyStringValue (rawEvent.name) +
+			string required = StringifyStringValue (rawEvent.name) +
 			                  SEPARATOR +
-			                  DefaultJSONEncoderImpl.StringifyStringValue (rawEvent.timestamp);
+			                  StringifyStringValue (rawEvent.timestamp);
 
 			string optional = "";
 			if ((rawEvent.nominals != null && rawEvent.nominals.Count != 0) ||

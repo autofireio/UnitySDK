@@ -52,6 +52,48 @@ namespace AutofireClient.Unity
 			return ret;
 		}
 
+		private string ReadUUIDHelper ()
+		{
+			return GetString ("uuid", true);
+		}
+
+		public override string ReadUUID ()
+		{
+			StoragePersistenceImpl storage = new StoragePersistenceImpl ();
+			if (storage.IsAvailable ()) {
+				string uuid = storage.ReadUUID ();
+				if (string.IsNullOrEmpty (uuid))
+					return ReadUUIDHelper ();
+				else
+					return storage.ReadUUID ();
+			}
+
+			return ReadUUIDHelper ();
+		}
+
+		private bool WriteUUIDHelper (string uuid)
+		{
+			bool ret = true;
+
+			try {
+				SetString ("uuid", uuid, true);
+			} catch {
+				ret = false;
+			}
+
+			return ret;
+		}
+
+		public override bool WriteUUID (string uuid)
+		{
+			StoragePersistenceImpl storage = new StoragePersistenceImpl ();
+			if (storage.IsAvailable ())
+				return storage.WriteUUID (uuid) ||
+				WriteUUIDHelper (uuid);
+			else
+				return WriteUUIDHelper (uuid);
+		}
+
 	}
 
 }
