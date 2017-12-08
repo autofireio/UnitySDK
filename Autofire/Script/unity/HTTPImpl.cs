@@ -106,7 +106,7 @@ namespace AutofireClient.Unity
 			if (!string.IsNullOrEmpty (acceptType))
 				headers2.Add ("Accept", acceptType);
 
-			WWW www = new WWW (url, data, headers);
+			WWW www = new WWW (url, data, headers2);
 			if (!forceSync)
 				StartCoroutine (ContinueFlushEvents (responseHandler, www));
 			else {
