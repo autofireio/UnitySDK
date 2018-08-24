@@ -2,7 +2,7 @@
 
 # Autofire | Unity SDK
 
-This is the Unity SDK for the **Autofire** - Game Analytics service.
+This is the Unity SDK for the **Autofire** - Game Optimization service.
 
 ## Get Started
 
