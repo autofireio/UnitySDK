@@ -6,8 +6,8 @@ This is the Unity SDK for the **Autofire** - Game Analytics service.
 
 ## Get Started
 
-Visit our [documention](https://autofire.io/documentation/sdk/get-started-sdk/?platform=unity) to get started in a few minutes!
+Visit our [documention](https://autofire.io/documentation/sdk/unity.html) to get started in a few minutes!
 
 ---
 
-Copyright (c) 2017 Autofire - Game Analytics | <http://autofire.io>
+Copyright (c) 2018 Autofire - Game Optimization | <http://autofire.io>
