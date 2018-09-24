@@ -56,11 +56,13 @@ namespace AutofireClient.Event
 
 		private static string Sanitize (string str, int len)
 		{
-			str = Regex.Replace (str, @"[^\u0020-\u007F]+", string.Empty);
-			return OnNonEmpty (Left (str.Trim (), len))
-				.Replace (SEPARATOR, '_')
-				.Replace (ASSIGNMENT, '_')
-				.Replace (TAB, ' ');
+			if (str == null)
+				return EMPTY_STRING;
+			
+			str = Regex.Replace (str,
+				@"[" + SEPARATOR + ASSIGNMENT + "]|[^\u0020-\u007E]+",
+				string.Empty);
+			return OnNonEmpty (Left (str.Trim (), len));
 		}
 
 		internal static string SanitizeName (string name)

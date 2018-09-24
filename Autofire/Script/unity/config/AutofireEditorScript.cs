@@ -89,7 +89,7 @@ namespace AutofireClient.Unity.Util
 		[MenuItem ("Window/Autofire/Documentation")]
 		public static void OpenDocs ()
 		{
-			string url = "https://autofire.io/documentation/sdk/get-started-sdk/?platform=unity";
+			string url = "https://autofire.io/documentation/sdk/unity.html";
 			Application.OpenURL (url);
 		}
 
