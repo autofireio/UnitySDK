@@ -1,4 +1,4 @@
-![Autofire logo](http://autofire.io/img/logo_ext.png)
+![logo](http://autofire.io/img/logo_ext.png)
 
 # Autofire | Unity SDK
 
