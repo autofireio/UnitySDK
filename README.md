@@ -1,5 +1,3 @@
-![logo](https://autofire.io/img/logo_ext.png)
-
 # Autofire | Unity SDK
 
 This is the Unity SDK for the **Autofire** - Game Optimization service.
